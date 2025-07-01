@@ -94,7 +94,7 @@ def main_app():
     </style>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["🏠 Home", "📤 Upload Billing", "📝 View/Edit Records"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🏠 Home", "📤 Upload Billing", "📝 View/Edit Records", "📈 Reports"])
 
     # -------------------- Tab 1: Home --------------------
     with tab1:
@@ -326,6 +326,59 @@ def main_app():
 
                 st.success("✅ Collection info updated and audit trail saved.")
                 st.rerun()
+
+    with tab4:
+        st.subheader("📈 REP-01 - Customer Outstanding Report")
+
+        # Optional Filters
+        dealer_filter = st.text_input("🔍 Filter by Dealer Code")
+        date_range = st.date_input("📅 Invoice Date Range", [])
+
+        where = ["due_amount > 0"]
+        params = {}
+
+        if dealer_filter:
+            where.append("dealer_code ILIKE :dealer_code")
+            params["dealer_code"] = f"%{dealer_filter}%"
+        
+        if len(date_range) == 2:
+            where.append("gst_invoice_date BETWEEN :start_date AND :end_date")
+            params["start_date"] = date_range[0]
+            params["end_date"] = date_range[1]
+
+        filter_sql = " AND ".join(where)
+        
+        query = f"""
+            SELECT 
+                customer_name AS "Customer",
+                gst_invoice_no AS "Invoice No",
+                gst_invoice_date AS "Invoice Date",
+                invoice_amt AS "Invoice Amount",
+                total_collection AS "Total Collected",
+                due_amount AS "Due Amount",
+                type_of_due AS "Due Type",
+                vehicle_reg_no AS "Vehicle No",
+                dealer_code AS "Dealer"
+            FROM fact_service_billing
+            WHERE {filter_sql}
+            ORDER BY gst_invoice_date DESC
+        """
+
+        df_outstanding = pd.read_sql(text(query), engine.connect(), params=params)
+
+        if df_outstanding.empty:
+            st.info("✅ No customer outstanding found for the selected filter.")
+        else:
+            st.dataframe(df_outstanding, use_container_width=True)
+
+            # Export button
+            csv = df_outstanding.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download as CSV",
+                data=csv,
+                file_name="customer_outstanding_report.csv",
+                mime="text/csv"
+            )
 
 
 # --- Entry Point ---
