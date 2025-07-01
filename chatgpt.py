@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit_option_menu import option_menu
 import pandas as pd
 from sqlalchemy import create_engine, text
 from urllib.parse import quote
@@ -28,7 +29,7 @@ def init_connection():
 
 engine = init_connection()
 
-# --- Query Utility (Optional use) ---
+# --- Query Utility ---
 @st.cache_data(ttl=600)
 def run_query(query):
     with engine.connect() as conn:
@@ -62,72 +63,68 @@ def main_app():
         st.session_state.clear()
         st.rerun()
 
-    st.title("📑 Service Billing Dashboard")
+    with st.sidebar:
+     selected_tab = option_menu(
+        menu_title="Navigation",
+        options=["🏠 Home", "📤 Upload Billing", "📝 View and Update Collection", "📈 Reports"],
+        icons=["house", "cloud-upload", "pencil-square", "bar-chart-line"],
+        menu_icon="cast",
+        default_index=0,
+        orientation="vertical",
+        styles={
+            "container": {"padding": "5px", "background-color": "#f0f2f6"},
+            "icon": {"color": "#3c3c3c", "font-size": "16px"},
+            "nav-link": {
+                "font-size": "14px",
+                "text-align": "left",
+                "margin": "2px",
+                "padding": "10px 10px",
+                "--hover-color": "#e9f5ff",
+            },
+            "nav-link-selected": {"background-color": "#d0eaff", "font-weight": "bold"},
+        }
+    )
 
-    # ✅ Debug file being executed
-    st.write("📄 Running file:", __file__)
-    st.write("🧪 Current working directory:", os.getcwd())
 
-    st.markdown("""
-    <style>
-    /* Tab bar wrapper */
-    .css-1y4p8pa {
-        background-color: #f8f9fa;
-        padding: 10px;
-        border-radius: 8px;
-        margin-bottom: 16px;
-        box-shadow: 0px 1px 5px rgba(0, 0, 0, 0.05);
-    }
-
-    /* Active tab button */
-    button[aria-selected="true"] {
-        background-color: #e0f2fe !important;
-        color: #1e3a8a !important;
-        font-weight: bold;
-        border-radius: 5px !important;
-    }
-
-    /* Inactive tab buttons */
-    button[aria-selected="false"] {
-        color: #6c757d !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    tab1, tab2, tab3, tab4 = st.tabs(["🏠 Home", "📤 Upload Billing", "📝 View/Edit Records", "📈 Reports"])
-
-    # -------------------- Tab 1: Home --------------------
-    with tab1:
-        st.write("Welcome to the billing tool dashboard!")
-
-        # 👇 Date selector with today's date as default
+    if selected_tab == "🏠 Home":
+        st.title("🏠 Home - Vehicle Visit Summary")
         selected_date = st.date_input("📅 Select Date", value=datetime.date.today())
 
         with engine.connect() as conn:
             result = conn.execute(text("""
-                SELECT COUNT(DISTINCT vin)
+                SELECT 
+                    COUNT(DISTINCT vin) AS vehicle_count,
+                    SUM(COALESCE(cust_labor, 0) + COALESCE(ins_labor, 0)) AS labour_earned
                 FROM fact_service_billing
                 WHERE gst_invoice_date = :selected_date
             """), {"selected_date": selected_date}).fetchone()
 
             vehicles_count = result[0] if result else 0
+            labour_earned = float(result[1] or 0.0)
 
-        # 👇 Card visual showing the count
-        col1, col2 = st.columns([1, 1])  # Two equal-width columns
+        col1, col2 = st.columns(2)
 
-        with col1:  # Place the card in the first half
+        with col1:
             st.markdown(f"""
                 <div style="background-color: #e0f2fe; padding: 20px; border-radius: 12px;
                             box-shadow: 2px 2px 10px rgba(0,0,0,0.1); text-align: center;">
-                    <h3 style="color: #1e3a8a;">🚗 Vehicles Visited on {selected_date.strftime('%d-%b-%Y')}</h3>
+                    <h3 style="color: #1e3a8a;">🚗 Vehicles Visited </h3>
                     <h1 style="font-size: 48px; margin-top: 0; color: #1e40af;">{vehicles_count}</h1>
                 </div>
             """, unsafe_allow_html=True)
 
+        with col2:
+            st.markdown(f"""
+                <div style="background-color: #e6fffa; padding: 20px; border-radius: 12px;
+                            box-shadow: 2px 2px 10px rgba(0,0,0,0.1); text-align: center;">
+                    <h3 style="color: #065f46;">🛠️ Labour Earned </h3>
+                    <h1 style="font-size: 48px; margin-top: 0; color: #047857;">₹ {labour_earned:,.2f}</h1>
+                </div>
+            """, unsafe_allow_html=True)
 
-    # -------------------- Tab 2: Upload Billing --------------------
-    with tab2:
-        st.subheader("📥 Upload Bills")
+
+    elif selected_tab == "📤 Upload Billing":
+        st.title("📤 Upload Billing Data")
         uploaded_file = st.file_uploader("Choose Excel file", type=["xlsx"], key=f"uploader_{st.session_state.upload_trigger}")
 
         if uploaded_file:
@@ -152,11 +149,9 @@ def main_app():
                 except Exception as e:
                     st.error(f"❌ Error saving to database: {e}")
 
-    # -------------------- Tab 3: View/Edit Records --------------------
-    with tab3:
-        st.subheader("📝 View & Edit Billing Records")
+    elif selected_tab == "📝 View and Update Collection":
+        st.title("📝 View & Update Collections")
 
-        # Filters
         invoice_filter = st.text_input("🔍 GST Invoice No")
         vehicle_filter = st.text_input("🚗 Vehicle Reg. No")
         date_filter = st.date_input("📅 GST Invoice Date", value=None)
@@ -176,7 +171,8 @@ def main_app():
 
         filter_sql = " AND ".join(where)
         query = "SELECT * FROM fact_service_billing"
-        query += " WHERE " + filter_sql if filter_sql else ""
+        if filter_sql:
+            query += " WHERE " + filter_sql
         query += " ORDER BY gst_invoice_date DESC LIMIT 50"
 
         df = pd.read_sql(text(query), engine.connect(), params=params)
@@ -191,10 +187,9 @@ def main_app():
             st.write(f"**Customer:** {record['customer_name']} | **Vehicle:** {record['vehicle_reg_no']}")
             st.write(f"**Invoice Amt:** ₹{record['invoice_amt']} | **Total Collection:** ₹{record['total_collection']} | **Due:** ₹{record['due_amount']}")
 
-            st.markdown("---")
             st.subheader("💰 Collection Details")
-
             col1, col2, col3 = st.columns(3)
+
             with col1:
                 receipt_number_1 = st.text_input("Receipt Number (i)", value=record['receipt_number_1'] or "")
                 receipt_date_1 = st.date_input("Receipt Date (i)", value=record['receipt_date_1'] if pd.notnull(record['receipt_date_1']) else None, key="rd1")
@@ -214,19 +209,12 @@ def main_app():
                 advance_collected = st.number_input("Advance Collected", value=float(record['advance_collected'] or 0), step=100.0)
                 discount_given = st.number_input("Discount Amount", value=float(record['discount_given'] or 0), step=100.0)
 
-            st.markdown("---")
             st.subheader("📄 Other Details")
-
             col4, col5, col6 = st.columns(3)
+
             with col4:
                 due_options = ["Pending", "Cleared", "Partially Paid"]
-                type_of_due = st.selectbox(
-                    "Type of Due",
-                    options=[""] + due_options,
-                    index=(due_options.index(record['type_of_due']) + 1) if record['type_of_due'] in due_options else 0,
-                    format_func=lambda x: "Select Type of Due" if x == "" else x
-                )
-                approval_amount = st.number_input("Approval Amount", value=float(record['approval_amount'] or 0), step=100.0)
+                type_of_due = st.selectbox("Type of Due", options=[""] + due_options, index=(due_options.index(record['type_of_due']) + 1) if record['type_of_due'] in due_options else 0)
 
             with col5:
                 claim_number = st.text_input("Claim Number", value=record['claim_number'] or "")
@@ -237,20 +225,19 @@ def main_app():
                 any_other_remarks = st.text_area("Any other remarks", value=record['any_other_remarks'] or "")
 
             if st.button("💾 Save All Updates"):
-                total_input_collection = (
-                    float(receipt_amount_1 or 0) +
-                    float(receipt_amount_2 or 0) +
-                    float(insurance_receipt_amount or 0) +
-                    float(advance_collected or 0) +
+                total_input_collection = sum([
+                    float(receipt_amount_1 or 0),
+                    float(receipt_amount_2 or 0),
+                    float(insurance_receipt_amount or 0),
+                    float(advance_collected or 0),
                     float(discount_given or 0)
-                )
+                ])
 
                 if total_input_collection > float(record['invoice_amt'] or 0):
                     st.error("❌ Total collection + discount cannot exceed invoice amount.")
                     st.stop()
 
                 with engine.begin() as conn:
-                    # Step 1: All relevant fields
                     fields_to_check = {
                         "receipt_amount_1": receipt_amount_1,
                         "receipt_amount_2": receipt_amount_2,
@@ -272,7 +259,6 @@ def main_app():
                         "any_other_remarks": any_other_remarks
                     }
 
-                    # Step 2: Fetch current values
                     current_data = conn.execute(text(f"""
                         SELECT {", ".join(fields_to_check.keys())}
                         FROM fact_service_billing
@@ -282,7 +268,6 @@ def main_app():
                         "gst_invoice_no": record["gst_invoice_no"]
                     }).fetchone()
 
-                    # Step 3: Insert audit logs
                     for i, field in enumerate(fields_to_check.keys()):
                         old_val = str(current_data[i]) if current_data[i] is not None else ""
                         new_val = str(fields_to_check[field]) if fields_to_check[field] is not None else ""
@@ -290,8 +275,7 @@ def main_app():
                             conn.execute(text("""
                                 INSERT INTO service_billing_audit_log (
                                     username, gst_invoice_no, dealer_code, changed_field, old_value, new_value
-                                )
-                                VALUES (:user, :invoice, :dealer, :field, :old, :new)
+                                ) VALUES (:user, :invoice, :dealer, :field, :old, :new)
                             """), {
                                 "user": st.session_state.username,
                                 "invoice": record["gst_invoice_no"],
@@ -301,7 +285,6 @@ def main_app():
                                 "new": new_val
                             })
 
-                    # Step 4: Update main table
                     update_q = text("""
                         UPDATE fact_service_billing
                         SET receipt_amount_1 = :ra1,
@@ -352,10 +335,9 @@ def main_app():
                 st.success("✅ Collection info updated and audit trail saved.")
                 st.rerun()
 
-    with tab4:
-        st.subheader("📈 REP-01 - Customer Outstanding Report")
+    elif selected_tab == "📈 Reports":
+        st.title("📈 REP-01 - Customer Outstanding Report")
 
-        # Optional Filters
         dealer_filter = st.text_input("🔍 Filter by Dealer Code")
         date_range = st.date_input("📅 Invoice Date Range", [])
 
@@ -372,7 +354,6 @@ def main_app():
             params["end_date"] = date_range[1]
 
         filter_sql = " AND ".join(where)
-        
         query = f"""
             SELECT 
                 customer_name AS "Customer",
@@ -395,16 +376,8 @@ def main_app():
             st.info("✅ No customer outstanding found for the selected filter.")
         else:
             st.dataframe(df_outstanding, use_container_width=True)
-
-            # Export button
             csv = df_outstanding.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Download as CSV",
-                data=csv,
-                file_name="customer_outstanding_report.csv",
-                mime="text/csv"
-            )
-
+            st.download_button("📥 Download as CSV", data=csv, file_name="customer_outstanding_report.csv", mime="text/csv")
 
 # --- Entry Point ---
 if __name__ == "__main__":
