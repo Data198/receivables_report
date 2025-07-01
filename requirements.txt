@@ -3,4 +3,4 @@ psycopg2-binary
 sqlalchemy
 pandas
 bcrypt
-
+streamlit-option-menu
