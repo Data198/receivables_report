@@ -100,6 +100,31 @@ def main_app():
     with tab1:
         st.write("Welcome to the billing tool dashboard!")
 
+        # 👇 Date selector with today's date as default
+        selected_date = st.date_input("📅 Select Date", value=datetime.date.today())
+
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT COUNT(DISTINCT vin)
+                FROM fact_service_billing
+                WHERE gst_invoice_date = :selected_date
+            """), {"selected_date": selected_date}).fetchone()
+
+            vehicles_count = result[0] if result else 0
+
+        # 👇 Card visual showing the count
+        col1, col2 = st.columns([1, 1])  # Two equal-width columns
+
+        with col1:  # Place the card in the first half
+            st.markdown(f"""
+                <div style="background-color: #e0f2fe; padding: 20px; border-radius: 12px;
+                            box-shadow: 2px 2px 10px rgba(0,0,0,0.1); text-align: center;">
+                    <h3 style="color: #1e3a8a;">🚗 Vehicles Visited on {selected_date.strftime('%d-%b-%Y')}</h3>
+                    <h1 style="font-size: 48px; margin-top: 0; color: #1e40af;">{vehicles_count}</h1>
+                </div>
+            """, unsafe_allow_html=True)
+
+
     # -------------------- Tab 2: Upload Billing --------------------
     with tab2:
         st.subheader("📥 Upload Bills")
