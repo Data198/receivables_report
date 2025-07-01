@@ -87,7 +87,7 @@ def main_app():
 
 
     if selected_tab == "🏠 Home":
-        st.title("🏠 Home - Vehicle Visit Summary")
+        st.title("Dealer Vehicle Service Dashboard")
         selected_date = st.date_input("📅 Select Date", value=datetime.date.today())
 
         with engine.connect() as conn:
@@ -102,25 +102,36 @@ def main_app():
             vehicles_count = result[0] if result else 0
             labour_earned = float(result[1] or 0.0)
 
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
 
         with col1:
             st.markdown(f"""
-                <div style="background-color: #e0f2fe; padding: 20px; border-radius: 12px;
-                            box-shadow: 2px 2px 10px rgba(0,0,0,0.1); text-align: center;">
-                    <h3 style="color: #1e3a8a;">🚗 Vehicles Visited </h3>
-                    <h1 style="font-size: 48px; margin-top: 0; color: #1e40af;">{vehicles_count}</h1>
+                <div style="background-color: #e0f2fe; padding: 5px; border-radius: 12px;
+                            box-shadow: 2px 2px 10px rgba(0,0,0,0.3); text-align: center;">
+                    <h5 style="color: #1e3a8a;text-align: center;">No. of Vehicles Visit</h5>
+                    <h1 style="font-size: 30px; margin-top: 0; color: #1e40af;">{vehicles_count}</h1>
                 </div>
             """, unsafe_allow_html=True)
 
         with col2:
             st.markdown(f"""
-                <div style="background-color: #e6fffa; padding: 20px; border-radius: 12px;
+                <div style="background-color: #e6fffa; padding: 5px; border-radius: 12px;
                             box-shadow: 2px 2px 10px rgba(0,0,0,0.1); text-align: center;">
-                    <h3 style="color: #065f46;">🛠️ Labour Earned </h3>
-                    <h1 style="font-size: 48px; margin-top: 0; color: #047857;">₹ {labour_earned:,.2f}</h1>
+                    <h5 style="color: #065f46; text-align: left;">🛠️ Labour Earned</h5>
+                    <h1 style="font-size: 30px; margin-top: 0; color: #047857;">₹ {labour_earned:,.0f}</h1>
                 </div>
             """, unsafe_allow_html=True)
+
+        with col3:
+            avg_labour_per_ro = labour_earned / vehicles_count if vehicles_count > 0 else 0
+            st.markdown(f"""
+                <div style="background-color: #fff7ed; padding: 5px; border-radius: 12px;
+                            box-shadow: 2px 2px 10px rgba(0,0,0,0.1); text-align: center;">
+                    <h5 style="color: #92400e;text-align: center;">Avg. Labour per RO</h5>
+                    <h1 style="font-size: 30px; margin-top: 0; color: #b45309;">₹ {avg_labour_per_ro:,.0f}</h1>
+                </div>
+            """, unsafe_allow_html=True)
+
 
 
     elif selected_tab == "📤 Upload Billing":
